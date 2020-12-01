@@ -1,0 +1,204 @@
+Lab 6 Commands
+# on ALL machines
+yum install nc tcpdump nmap
+
+# on ABCD F (not E)
+# Allow DHCP Requests
+iptables -A INPUT -p udp -s 100.64.5.1 --dport=68 -j ACCEPT
+iptables -A OUTPUT -p udp -d 100.64.5.1 --dport=67 -j ACCEPT
+
+
+# Allow SSH from subnets
+iptables -A INPUT -p tcp -s 100.64.0.0/16 --dport=22 -j ACCEPT
+iptables -A INPUT -p tcp -s 10.21.32.0/24 --dport=22 -j ACCEPT
+iptables -A INPUT -p tcp -s 198.18.0.0/16 --dport=22 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=22 -j ACCEPT
+service iptables save
+
+iptables -A INPUT -p tcp -s 100.64.0.0/16 --sport 22 -j ACCEPT
+iptables -A INPUT -p tcp -s 10.21.32.0/24 --sport 22 -j ACCEPT
+iptables -A INPUT -p tcp -s 198.18.0.0/16 --sport 22 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport 22 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
+service iptables save
+# on E
+	# Allow DHCP Interactions
+iptables -A INPUT -p udp -s 10.21.32.1 --dport=68 -j ACCEPT
+iptables -A OUTPUT -p udp -d 10.21.32.1 --dport=67 -j ACCEPT
+
+# Allow SSH from subnets
+iptables -A INPUT -p tcp -s 10.21.32.0/24 --dport=22 -j ACCEPT
+iptables -A OUTPUT -p tcp -d 10.21.32.0/24 --dport=22 -j ACCEPT
+service iptables save
+
+#on ALL
+systemctl enable iptables
+systemctl start iptables
+# Allow Loopback
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+service iptables save
+
+# Allow inbound ICMP traffic
+iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type echo-reply -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type time-exceeded -j ACCEPT
+iptables -A INPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
+
+# Allow DNS Lookups
+iptables -A INPUT -p udp --sport=53 -s 100.64.5.4 -j ACCEPT
+iptables -A OUTPUT -p udp --dport=53 -s 100.64.5.4 -j ACCEPT
+iptables -A INPUT -p tcp --sport=53 -s 100.64.5.4 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport=53 -s 100.64.5.4 -j ACCEPT
+
+service iptables save
+
+# On A
+# Allow DHCP Interactions
+# Clinet -> Server 67
+# Server -> Client 68
+iptables -A INPUT -p udp -s 100.64.5.0/24 --dport=67 -j ACCEPT
+iptables -A OUTPUT -p udp -d 100.64.5.0/24 --dport=68 -j ACCEPT
+iptables -A INPUT -p udp -s 10.21.32.0/24 --dport=67 -j ACCEPT
+iptables -A OUTPUT -p udp -d 10.21.32.0/24 --dport=68 -j ACCEPT
+
+# Allow subnets to talk to each other
+iptables -A FORWARD -d 100.64.5.0/24 -s 10.21.32.0/24 -j ACCEPT
+iptables -A FORWARD -d 10.21.32.0/24 -s 100.64.5.0/24 -j ACCEPT
+
+#Block Facebook
+# Facebook IP 157.240.28.35
+iptables -A INPUT -s 157.240.28.35 -j DROP
+iptables -A OUTPUT -d 157.240.28.35 -j DROP
+iptables -A FORWARD -s 157.240.28.35 -j DROP
+iptables -A FORWARD -d 157.240.28.35 -j DROP
+
+#Block Cheezburger
+# Cheezburger IP 216.176.186.210
+iptables -A INPUT -s 216.176.186.210 -j DROP
+iptables -A OUTPUT -d 216.176.186.210 -j DROP
+iptables -A FORWARD -s 216.176.186.210 -j DROP
+iptables -A FORWARD -d 216.176.186.210 -j DROP
+
+##### Machine A Redundancy List #####
+
+# User Chains
+iptables -N WEB
+iptables -N FTP
+iptables -N DNS
+iptables -N FILE
+
+#triggers for B Chain
+iptables -A FORWARD -d 100.64.5.2 -j WEB
+iptables -A FORWARD -s 100.64.5.2 -j WEB
+#triggers for F Chain
+iptables -A FORWARD -d 100.64.5.5 -j WEB
+iptables -A FORWARD -s 100.64.5.5 -j WEB
+#triggers for C Chain
+iptables -A FORWARD -d 100.64.5.3 -j FTP
+iptables -A FORWARD -s 100.64.5.3 -j FTP
+#triggers for D Chain
+iptables -A FORWARD -d 100.64.5.4 -j DNS
+iptables -A FORWARD -s 100.64.5.4 -j DNS
+#triggers for E Chain
+iptables -A FORWARD -d 10.21.32.2 -j FILE
+iptables -A FORWARD -s 10.21.32.2 -j FILE
+
+# Triggers for WEB HTTP
+iptables -A WEB -p tcp --dport=80 -j ACCEPT
+iptables -A WEB -p tcp --sport=80 -j ACCEPT
+# Triggers for WEB HTTPS
+iptables -A WEB -p tcp --dport=443 -j ACCEPT
+iptables -A WEB -p tcp --sport=443 -j ACCEPT
+
+# Triggers for C Outbound SSH
+iptables -A FORWARD -p tcp --sport 22 -j ACCEPT
+
+# Triggers for C HTTP/HTTPS
+iptables -A FTP -p tcp --dport=80 -j ACCEPT
+iptables -A FTP -p tcp --sport=80 -j ACCEPT
+# Triggers for C HTTPS
+iptables -A FTP -p tcp --dport=443 -j ACCEPT
+iptables -A FTP -p tcp --sport=443 -j ACCEPT
+
+#Triggers for C FTP
+iptables -A FTP -p tcp --dport=21 -j ACCEPT
+iptables -A FTP -p tcp --sport=21 -j ACCEPT
+
+service iptables save
+#### END OF A ####
+
+---------
+# On B AND F
+#HTTP
+iptables -A INPUT -p tcp --dport=80 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=80 -j ACCEPT
+#HTTPS
+iptables -A INPUT -p tcp --dport=443 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=443 -j ACCEPT
+service iptables save
+
+# On C
+# Allow DHCP
+iptables -A INPUT -p udp -s 100.64.5.1 --dport=68 -j ACCEPT
+iptables -A OUTPUT -p udp -d 100.64.5.1 --dport=67 -j ACCEPT
+# Allow DNS
+iptables -A INPUT -p udp --sport=53 -s 100.64.5.4 -j ACCEPT
+iptables -A OUTPUT -p udp --dport=53 -d 100.64.5.4 -j ACCEPT
+iptables -A INPUT -p tcp --sport=53 -s 100.64.5.4 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport=53 -d 100.64.5.4 -j ACCEPT
+# Allow SSH (done earlier)
+# Allow HTTP
+##iptables -A INPUT -p tcp --dport=80 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=80 -j ACCEPT
+#HTTPS
+##iptables -A INPUT -p tcp --dport=443 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=443 -j ACCEPT
+
+# Allow FTP
+iptables -A INPUT -p tcp -s 100.64.0.0/16 --dport=21 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=21 -j ACCEPT
+
+# Allow ICMP Outbound (Inbound Done Above)
+iptables -A OUTPUT -p icmp --icmp-type echo-request -j ACCEPT
+iptables -A OUTPUT -p icmp --icmp-type echo-reply -j ACCEPT
+iptables -A OUTPUT -p icmp --icmp-type time-exceeded -j ACCEPT
+iptables -A OUTPUT -p icmp --icmp-type destination-unreachable -j ACCEPT
+
+# allow outbound SSH (out -destination 22, in -source 22)
+iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --sport 22 -j ACCEPT
+# allow outbound FTP (out -d 21, in -s 21)
+iptables -A INPUT -p tcp --sport 21 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 21 -j ACCEPT
+# allow outbound HTTP
+iptables -A INPUT -p tcp --sport 80 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 80 -j ACCEPT
+# allow outbound HTTPS
+iptables -A INPUT -p tcp --sport 443 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+
+# Change default outgoing policy to be deny
+iptables -P OUTPUT DROP
+
+service iptables save
+
+# On D
+# Allow DNS Requests
+iptables -A INPUT -p udp --dport=53 -j ACCEPT
+iptables -A OUTPUT -p udp --sport=53 -j ACCEPT
+iptables -A INPUT -p tcp --dport=53 -j ACCEPT
+iptables -A OUTPUT -p tcp --sport=53 -j ACCEPT
+
+service iptables save
+
+# On E
+# only allow (port 135/tcp, 137-139/udp,  445/tcp) on 10.21.32.0/24
+iptables -A INPUT -p tcp -s 10.21.32.0/24 --dport=135 -j ACCEPT
+iptables -A INPUT -p tcp -s 10.21.32.0/24 --dport=445 -j ACCEPT
+iptables -A INPUT -p udp -s 10.21.32.0/24 --dport=137:139 -j ACCEPT
+iptables -A OUTPUT -p tcp -d 10.21.32.0/24 --sport=135 -j ACCEPT
+iptables -A OUTPUT -p tcp -d 10.21.32.0/24 --sport=445 -j ACCEPT
+iptables -A OUTPUT -p udp -d 10.21.32.0/24 --sport=137:139 -j ACCEPT
+
+service iptables save
